@@ -68,6 +68,7 @@ jobs:
             CNPG_TAG=${{ matrix.cnpg_tag }}
             TARGETARCH=${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
           push: true
+          provenance: false
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v2
