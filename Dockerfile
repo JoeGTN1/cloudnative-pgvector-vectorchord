@@ -1,6 +1,6 @@
 ARG CNPG_TAG
 
-FROM ghcr.io/cloudnative-pg/postgresql:$CNPG_TAG-minimal-bookworm
+FROM --platform=$TARGETPLATFORM ghcr.io/cloudnative-pg/postgresql:$CNPG_TAG-minimal-bookworm
 
 ARG CNPG_TAG
 ARG VECTORCHORD_TAG=0.3.0
