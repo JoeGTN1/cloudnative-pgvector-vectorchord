@@ -1,0 +1,144 @@
+name: package
+on:
+  push:
+    branches: ['master']
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+        cnpg_tag: ["16", "17"]
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare
+        run: |
+          platform='${{ matrix.platform }}'
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch,suffix=-pg${{ matrix.cnpg_tag }}
+            type=ref,event=pr,suffix=-pg${{ matrix.cnpg_tag }}
+            type=semver,pattern={{version}},suffix=-pg${{ matrix.cnpg_tag }}
+            type=semver,pattern={{major}}.{{minor}},suffix=-pg${{ matrix.cnpg_tag }}
+            type=raw,value=latest-pg${{ matrix.cnpg_tag }},enable={{is_default_branch}}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # Only tag by registry + image name to push by digest
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-pg${{ matrix.cnpg_tag }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            CNPG_TAG=${{ matrix.cnpg_tag }}
+            TARGETARCH=${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p ${{ runner.temp }}/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}-pg${{ matrix.cnpg_tag }}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}-pg${{ matrix.cnpg_tag }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-pg${{ matrix.cnpg_tag }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  merge:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    strategy:
+      matrix:
+        cnpg_tag: ["16", "17"]
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*-pg${{ matrix.cnpg_tag }}
+          merge-multiple: true
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch,suffix=-pg${{ matrix.cnpg_tag }}
+            type=ref,event=pr,suffix=-pg${{ matrix.cnpg_tag }}
+            type=semver,pattern={{version}},suffix=-pg${{ matrix.cnpg_tag }}
+            type=semver,pattern={{major}}.{{minor}},suffix=-pg${{ matrix.cnpg_tag }}
+            type=raw,value=latest-pg${{ matrix.cnpg_tag }},enable={{is_default_branch}}
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *-pg${{ matrix.cnpg_tag }})
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
