@@ -19,7 +19,7 @@ jobs:
             runner: ubuntu-latest
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
-        cnpg_tag: ["16", "17"]
+        cnpg_tag: ["16.8", "17.5"]
     permissions:
       contents: read
       packages: write

@@ -15,8 +15,6 @@ RUN apt-get install -y \
   /tmp/vchord.deb \
   /tmp/pgvectors.deb \
   && \
-  rm -f \
-    /tmp/vchord.deb \
-    /tmp/pgvectors.deb
+  rm -f /tmp/vchord.deb /tmp/pgvectors.deb
 
 USER postgres
