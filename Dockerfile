@@ -3,7 +3,7 @@ ARG CNPG_TAG
 FROM ghcr.io/tensorchord/cloudnative-vectorchord:${CNPG_TAG}
 
 ARG CNPG_TAG
-ARG PGVECTORS_TAG=v0.4.0
+ARG PGVECTORS_TAG=v0.3.0
 ARG TARGETARCH
 
 # drop to root to install packages
