@@ -17,15 +17,9 @@ jobs:
           - platform: linux/amd64
             runner: ubuntu-latest
             cnpg_tag: "16.9"
-          - platform: linux/amd64
-            runner: ubuntu-latest
-            cnpg_tag: "17.5"
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
             cnpg_tag: "16.9"
-          - platform: linux/arm64
-            runner: ubuntu-24.04-arm
-            cnpg_tag: "17.5"
     permissions:
       contents: read
       packages: write
@@ -108,7 +102,7 @@ jobs:
       - build
     strategy:
       matrix:
-        cnpg_tag: ["16.9", "17.5"]
+        cnpg_tag: ["16.9"]
     permissions:
       contents: read
       packages: write
