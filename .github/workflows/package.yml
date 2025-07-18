@@ -3,10 +3,9 @@ on:
   push:
     branches: ['master']
   workflow_dispatch:
-
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME_UC: ${{ github.repository }}
 
 jobs:
   build:
@@ -33,6 +32,10 @@ jobs:
       attestations: write
       id-token: write
     steps:
+      - name: Env
+        run: |
+          echo "IMAGE_NAME=${IMAGE_NAME_UC,,}" >>${GITHUB_ENV}
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
